@@ -444,8 +444,8 @@ textarea { min-height: 80px; resize: vertical; }
         <div class="card-header"><span class="card-title">Rekap Peminjaman Terkini</span></div>
         <div class="card-body">
           <div class="table-wrap"><table>
-            <thead><tr><th>Mata Kuliah</th><th>Tanggal</th><th>Hadir</th><th>Izin</th><th>Alpa</th><th>Kehadiran</th></tr></thead>
-            <tbody id="dash-absen-table"><tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">Belum ada data</td></tr></tbody>
+            <thead><tr><th>Peminjam</th><th>Alat</th><th>Tgl Pinjam</th><th>Kembali</th><th>Status</th></tr></thead>
+            <tbody id="dash-pinjam-table"><tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">Belum ada data</td></tr></tbody>
           </table></div>
         </div>
       </div>
@@ -1145,15 +1145,16 @@ function renderDashboard() {
     const d=new Date(j.tanggal+'T00:00:00'); const isToday=j.tanggal===todayStr;
     return `<div class="sched-item"><div class="sched-time"><div class="day">${days[d.getDay()]}</div><div class="hour">${j.mulai}</div></div><div class="sched-info"><h4>${j.matkul}${j.percobaan?' <span style="font-size:11px;font-weight:600;background:var(--accent-light);color:var(--accent);padding:1px 7px;border-radius:4px;">Percobaan ke-'+j.percobaan+'</span>':''}</h4><p>${j.ruangan} · ${j.asisten}</p><div class="sched-meta">${isToday?'<span class="badge badge-blue"><span class="dot"></span>Hari Ini</span>':''}<span class="badge badge-gray">${(j.peserta||[]).length}/${j.kapasitas}</span></div></div></div>`;
   }).join(''):'<p style="color:var(--text3);text-align:center;padding:20px">Belum ada jadwal</p>';
-  const tbl=document.getElementById('dash-absen-table');
-  const rows=Object.entries(state.absensi).map(([jid,data])=>{
-    const j=state.jadwal.find(x=>x.id===jid); if(!j) return null;
-    const vals=Object.values(data);
-    const h=vals.filter(v=>v==='hadir').length,iz=vals.filter(v=>v==='izin').length,al=vals.filter(v=>v==='alpa').length;
-    const pct=vals.length?Math.round(h/vals.length*100):0;
-    return `<tr><td>${j.matkul}</td><td>${j.tanggal}</td><td><span class="badge badge-green">${h}</span></td><td><span class="badge badge-amber">${iz}</span></td><td><span class="badge badge-red">${al}</span></td><td><div style="display:flex;align-items:center;gap:8px"><div class="progress-bar" style="flex:1;height:5px"><div class="progress-fill" style="width:${pct}%;background:var(--success)"></div></div><span class="mono">${pct}%</span></div></td></tr>`;
-  }).filter(Boolean);
-  tbl.innerHTML=rows.length?rows.join(''):'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">Belum ada data</td></tr>';
+  const tbl=document.getElementById('dash-pinjam-table');
+  const recentPinjam=(state.peminjaman||[]).slice(-10).reverse();
+  const pRows=recentPinjam.map(p=>{
+    const alatList=p.alat||[{alatNama:p.alatNama,jumlah:p.jumlah}];
+    const alatStr=alatList.map(a=>`${a.alatNama} (${a.jumlah})`).join(', ');
+    const sc=p.status==='menunggu'?'amber':p.status==='disetujui'?'blue':p.status==='dikembalikan'?'green':'red';
+    const stTxt=p.status==='menunggu'?'⏳ Menunggu':p.status==='disetujui'?'📦 Dipinjam':p.status==='dikembalikan'?'✅ Kembali':'❌ Ditolak';
+    return `<tr><td style="font-weight:600">${p.nama}</td><td style="font-size:12.5px">${alatStr}</td><td>${p.tanggal}</td><td>${p.rencanakembali||'—'}</td><td><span class="badge badge-${sc}">${stTxt}</span></td></tr>`;
+  });
+  tbl.innerHTML=pRows.length?pRows.join(''):'<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">Belum ada data</td></tr>';
   updateBadges();
 }
 
