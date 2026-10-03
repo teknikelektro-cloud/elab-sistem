@@ -1,7 +1,7 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>E-Lab</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --bg: #F5F0EB; --surface: #FFFFFF; --surface2: #FDF8F4;
@@ -894,14 +894,62 @@ textarea { min-height: 80px; resize: vertical; }
 <div class="toast" id="toast"><span class="toast-icon"></span><span id="toast-msg"></span></div>
 
 <script>
+// ===== SUPABASE =====
+const SUPABASE_URL = 'https://rptgbzkheklvdaerzrem.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Kfzs-_XImZXat73cFEmcIQ_XkCx0TAK';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // ===== STATE =====
 let state = { jadwal:[], inventaris:[], absensi:{}, nilai:{}, users:[], kurikulum:[], peminjaman:[], registrasi:[], settings:{tahunAkademik:'2025/2026',semester:'Ganjil'} };
 let currentUser = null;
 let calMonth = new Date().getMonth(), calYear = new Date().getFullYear();
 
-// ===== STORAGE =====
-function load() {
-  try { const s = localStorage.getItem('silab_v3'); if(s) state = JSON.parse(s); } catch(e){}
+// ===== STORAGE (SUPABASE) =====
+async function load() {
+  try {
+    const [rUsers, rJadwal, rInv, rPinjam, rNilai, rAbsensi, rReg, rKurikulum, rSettings] = await Promise.all([
+      sb.from('users').select('*'),
+      sb.from('jadwal').select('*'),
+      sb.from('inventaris').select('*'),
+      sb.from('peminjaman').select('*').order('created_at',{ascending:true}),
+      sb.from('nilai').select('*'),
+      sb.from('absensi').select('*'),
+      sb.from('registrasi').select('*').order('created_at',{ascending:true}),
+      sb.from('kurikulum').select('*'),
+      sb.from('settings').select('*'),
+    ]);
+    // Map Supabase snake_case columns back to camelCase used by the app
+    state.users = (rUsers.data||[]).map(u=>({id:u.id,username:u.username,password:u.password,nama:u.nama,role:u.role,nim:u.nim||'',email:u.email||'',hp:u.hp||'',angkatan:u.angkatan||null}));
+    state.jadwal = (rJadwal.data||[]).map(j=>{
+      const peserta=j.peserta||[]; const ketua=j.ketua||[];
+      return {id:j.id,matkul:j.matkul,percobaan:j.percobaan,tanggal:j.tanggal,tanggalSelesai:j.tanggal_selesai,mulai:j.mulai,selesai:j.selesai,ruangan:j.ruangan,dosen:j.dosen,asisten:j.asisten||[],kapasitas:j.kapasitas||0,peserta,ketua,
+        ...(j.extra||{})};
+    });
+    state.inventaris = (rInv.data||[]).map(i=>({id:i.id,nama:i.nama,kode:i.kode,kategori:i.kategori,tipe:i.tipe||'',pabrikan:i.pabrikan||'',tahunPengadaan:i.tahun_pengadaan||'',jumlah:i.jumlah||0,kondisi:i.kondisi||'Baik',ket:i.ket||''}));
+    state.peminjaman = (rPinjam.data||[]).map(p=>({id:p.id,nama:p.nama,nim:p.nim||'',hp:p.hp||'',email:p.email||'',alat:p.alat||[],tanggal:p.tanggal,rencanakembali:p.rencanakembali||'',aktualKembali:p.aktual_kembali||'',ket:p.ket||'',status:p.status||'menunggu',createdAt:p.created_at,role:p.role||'mahasiswa'}));
+    // Nilai: rows → nested object {jadwal_id: {nim: {pre,prak,lap,total,lapAcc}}}
+    state.nilai = {};
+    (rNilai.data||[]).forEach(n=>{
+      if(!state.nilai[n.jadwal_id]) state.nilai[n.jadwal_id]={};
+      state.nilai[n.jadwal_id][n.nim]={pre:Number(n.pre)||0,prak:Number(n.prak)||0,lap:Number(n.lap)||0,total:Number(n.total)||0,lapAcc:!!n.lap_acc};
+    });
+    // Absensi: rows → nested object {jadwal_id: {nim: status}}
+    state.absensi = {};
+    (rAbsensi.data||[]).forEach(a=>{
+      if(!state.absensi[a.jadwal_id]) state.absensi[a.jadwal_id]={};
+      state.absensi[a.jadwal_id][a.nim]=a.status;
+    });
+    state.registrasi = (rReg.data||[]).map(r=>({id:r.id,nama:r.nama,nim:r.nim||'',hp:r.hp||'',email:r.email||'',angkatan:r.angkatan||null,ket:r.ket||'',status:r.status||'pending',createdAt:r.created_at}));
+    state.kurikulum = (rKurikulum.data||[]).map(k=>({id:k.id,kode:k.kode||'',nama:k.nama||'',sks:k.sks||0,semester:k.semester||1}));
+    // Settings
+    state.settings = {tahunAkademik:'2025/2026',semester:'Ganjil'};
+    (rSettings.data||[]).forEach(s=>{ state.settings[s.key]=s.value; });
+    if(!state.laporan) state.laporan=[];
+  } catch(e) {
+    console.error('Supabase load error:', e);
+    // Fallback ke localStorage
+    try { const s = localStorage.getItem('silab_v3'); if(s) state = JSON.parse(s); } catch(e2){}
+  }
   if(!state.jadwal) state.jadwal=[];
   if(!state.inventaris) state.inventaris=[];
   if(!state.absensi) state.absensi={};
@@ -911,15 +959,91 @@ function load() {
   if(!state.registrasi) state.registrasi=[];
   seedIfEmpty();
 }
+
+let _saveTimer=null;
 function save() {
+  // Debounce: batch rapid saves into one sync
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(()=>_syncToSupabase(),300);
+  // Also keep localStorage as offline fallback
   try { localStorage.setItem('silab_v3', JSON.stringify(state)); } catch(e){}
 }
+async function _syncToSupabase(){
+  try {
+    // Users
+    await sb.from('users').upsert(state.users.map(u=>({id:u.id,username:u.username,password:u.password,nama:u.nama,role:u.role,nim:u.nim||null,email:u.email||null,hp:u.hp||null,angkatan:u.angkatan||null})),{onConflict:'id'});
+    // Jadwal — store extra fields in JSONB 'extra' column
+    await sb.from('jadwal').upsert(state.jadwal.map(j=>{
+      const {id,matkul,percobaan,tanggal,tanggalSelesai,mulai,selesai,ruangan,dosen,asisten,kapasitas,peserta,ketua,...extra}=j;
+      return {id,matkul,percobaan:percobaan||null,tanggal,tanggal_selesai:tanggalSelesai||null,mulai:mulai||null,selesai:selesai||null,ruangan:ruangan||null,dosen:dosen||null,asisten:Array.isArray(asisten)?asisten:asisten?[asisten]:[],kapasitas:kapasitas||0,peserta:peserta||[],ketua:ketua||[],extra};
+    }),{onConflict:'id'});
+    // Inventaris
+    await sb.from('inventaris').upsert(state.inventaris.map(i=>({id:i.id,nama:i.nama,kode:i.kode,kategori:i.kategori,tipe:i.tipe||null,pabrikan:i.pabrikan||null,tahun_pengadaan:i.tahunPengadaan||null,jumlah:i.jumlah||0,kondisi:i.kondisi||'Baik',ket:i.ket||null})),{onConflict:'id'});
+    // Peminjaman
+    await sb.from('peminjaman').upsert(state.peminjaman.map(p=>({id:p.id,nama:p.nama,nim:p.nim||null,hp:p.hp||null,email:p.email||null,alat:p.alat||[],tanggal:p.tanggal,rencanakembali:p.rencanakembali||null,aktual_kembali:p.aktualKembali||null,ket:p.ket||null,status:p.status||'menunggu',created_at:p.createdAt||new Date().toISOString(),role:p.role||'mahasiswa'})),{onConflict:'id'});
+    // Nilai: flatten nested object → rows
+    const nilaiRows=[];
+    for(const jid in state.nilai){
+      for(const nim in state.nilai[jid]){
+        const n=state.nilai[jid][nim];
+        nilaiRows.push({jadwal_id:jid,nim,pre:n.pre||0,prak:n.prak||0,lap:n.lap||0,total:n.total||0,lap_acc:!!n.lapAcc});
+      }
+    }
+    if(nilaiRows.length) await sb.from('nilai').upsert(nilaiRows,{onConflict:'jadwal_id,nim'});
+    // Absensi: flatten nested object → rows
+    const absensiRows=[];
+    for(const jid in state.absensi){
+      for(const nim in state.absensi[jid]){
+        absensiRows.push({jadwal_id:jid,nim,status:state.absensi[jid][nim]});
+      }
+    }
+    if(absensiRows.length) await sb.from('absensi').upsert(absensiRows,{onConflict:'jadwal_id,nim'});
+    // Registrasi
+    await sb.from('registrasi').upsert(state.registrasi.map(r=>({id:r.id,nama:r.nama,nim:r.nim||null,hp:r.hp||null,email:r.email||null,angkatan:r.angkatan||null,ket:r.ket||null,status:r.status||'pending',created_at:r.createdAt||new Date().toISOString()})),{onConflict:'id'});
+    // Kurikulum
+    if(state.kurikulum?.length) await sb.from('kurikulum').upsert(state.kurikulum.map(k=>({id:k.id,kode:k.kode||null,nama:k.nama||null,sks:k.sks||0,semester:k.semester||1})),{onConflict:'id'});
+    // Settings
+    const settingsRows=Object.entries(state.settings).map(([key,value])=>({key,value}));
+    if(settingsRows.length) await sb.from('settings').upsert(settingsRows,{onConflict:'key'});
+    // Handle deletions: sync removed items
+    await _syncDeletions();
+  } catch(e){ console.error('Supabase sync error:', e); }
+}
+// Track IDs so we can detect deletions
+let _prevIds={users:[],jadwal:[],inventaris:[],peminjaman:[],registrasi:[],kurikulum:[]};
+function _snapshotIds(){
+  _prevIds={
+    users:state.users.map(x=>x.id),
+    jadwal:state.jadwal.map(x=>x.id),
+    inventaris:state.inventaris.map(x=>x.id),
+    peminjaman:state.peminjaman.map(x=>x.id),
+    registrasi:state.registrasi.map(x=>x.id),
+    kurikulum:(state.kurikulum||[]).map(x=>x.id),
+  };
+}
+async function _syncDeletions(){
+  const tables=['users','jadwal','inventaris','peminjaman','registrasi','kurikulum'];
+  for(const t of tables){
+    const currentIds=(state[t]||[]).map(x=>x.id);
+    const removed=_prevIds[t].filter(id=>!currentIds.includes(id));
+    for(const id of removed){
+      await sb.from(t).delete().eq('id',id);
+    }
+  }
+  // Also delete nilai/absensi for deleted jadwal
+  const removedJadwal=_prevIds.jadwal.filter(id=>!state.jadwal.some(j=>j.id===id));
+  for(const jid of removedJadwal){
+    await sb.from('nilai').delete().eq('jadwal_id',jid);
+    await sb.from('absensi').delete().eq('jadwal_id',jid);
+  }
+  _snapshotIds();
+}
+
 function seedIfEmpty() {
-  // Hanya buat akun admin default jika belum ada user sama sekali
   if(!state.users.length) state.users = [
     {id:'u1',username:'admin',password:'admin2024',nama:'Administrator',role:'admin',nim:''},
   ];
-  save();
+  _snapshotIds();
 }
 
 // ===== AUTH =====
@@ -2914,21 +3038,30 @@ function deleteKurikulum(id) {
 }
 
 // ===== INIT =====
-load();
-initEmailJS();
-populateLoginDropdown();
-if(checkSession()){
-  // Recompute effective role in case jadwal assignments changed since last login
-  if(currentUser){
-    const effectiveRole=getEffectiveRole(currentUser);
-    if(effectiveRole!==currentUser.role){ currentUser={...currentUser,role:effectiveRole}; try{sessionStorage.setItem('e-lab_user',JSON.stringify(currentUser));}catch(e){} }
+(async function init(){
+  // Show loading overlay
+  const loadingEl=document.createElement('div');
+  loadingEl.id='loading-overlay';
+  loadingEl.style.cssText='position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0E0B1F,#1A1540);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px';
+  loadingEl.innerHTML='<div style="font-size:28px;font-weight:800;color:#fff;letter-spacing:-1px">E-<span style="color:#3B82F6">Lab</span></div><div style="color:rgba(255,255,255,.5);font-size:13px">Memuat data dari server...</div><div style="width:180px;height:4px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden"><div style="width:40%;height:100%;background:#F97316;border-radius:4px;animation:loadbar 1.2s ease-in-out infinite"></div></div><style>@keyframes loadbar{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}</style>';
+  document.body.appendChild(loadingEl);
+
+  await load();
+  populateLoginDropdown();
+  if(checkSession()){
+    if(currentUser){
+      const effectiveRole=getEffectiveRole(currentUser);
+      if(effectiveRole!==currentUser.role){ currentUser={...currentUser,role:effectiveRole}; try{sessionStorage.setItem('e-lab_user',JSON.stringify(currentUser));}catch(e){} }
+    }
+    document.getElementById('login-screen').hidden=true;
+    document.getElementById('app-main').hidden=false;
+    setupRole();
+    updateTaChip();
+    renderDashboard();
   }
-  document.getElementById('login-screen').hidden=true;
-  document.getElementById('app-main').hidden=false;
-  setupRole();
-  updateTaChip();
-  renderDashboard();
-}
+  // Remove loading overlay
+  loadingEl.remove();
+})();
 </script>
 
 </body></html>
