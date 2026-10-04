@@ -1320,8 +1320,10 @@ function setupRole() {
   document.getElementById('nav-kurikulum').hidden = displayRole!=='admin';
   document.getElementById('nav-users').hidden = displayRole!=='admin';
   const baseR=u._baseRole||u.role;
-  document.getElementById('nav-surat-bebas').hidden = !(baseR==='admin'||baseR==='mahasiswa'||baseR==='ketua'||baseR==='asisten');
-  document.getElementById('nav-dokumen').hidden = !(baseR==='admin'||baseR==='dosen'||baseR==='asisten');
+  const isAnyAsisten=(state.jadwal||[]).some(j=>{const a=j.asisten||[];return Array.isArray(a)?a.includes(u.id)||a.includes(u.nama):a===u.nama;});
+  const isAnyDosen=baseR==='dosen'||(state.jadwal||[]).some(j=>j.dosen===u.nama||j.dosen===u.id);
+  document.getElementById('nav-surat-bebas').hidden = !(baseR==='admin'||baseR==='mahasiswa'||baseR==='ketua'||baseR==='asisten'||isAnyAsisten);
+  document.getElementById('nav-dokumen').hidden = !(baseR==='admin'||isAnyDosen||isAnyAsisten);
   document.getElementById('nav-penandatangan').hidden = baseR!=='admin';
   document.getElementById('nav-jadwal-saya').hidden = true;
   document.getElementById('nav-absensi-saya').hidden = true;
@@ -1381,7 +1383,20 @@ function renderPage(name) {
   if(name==='kurikulum') renderKurikulum();
   if(name==='jadwal-saya') renderJadwalSaya();
   if(name==='absensi-saya') renderAbsensiSaya();
-  if(name==='dokumen') renderSuratTugas();
+  if(name==='dokumen') {
+    const baseR=currentUser?._baseRole||currentUser?.role;
+    const isAnyAsisten=(state.jadwal||[]).some(j=>{const a=j.asisten||[];return Array.isArray(a)?a.includes(currentUser.id)||a.includes(currentUser.nama):a===currentUser.nama;});
+    const isAnyDosen=baseR==='dosen';
+    const tabs=document.getElementById('dokumen-tabs-main');
+    if(tabs){
+      const tabEls=tabs.querySelectorAll('.tab');
+      if(baseR==='admin'){tabEls[0].hidden=false;tabEls[1].hidden=false;renderSuratTugas();}
+      else if(isAnyDosen&&!isAnyAsisten){tabEls[0].hidden=false;tabEls[1].hidden=true;renderSuratTugas();}
+      else if(isAnyAsisten&&!isAnyDosen){tabEls[0].hidden=true;tabEls[1].hidden=false;switchTab('dokumen',1,tabEls[1]);renderSertifikatAsisten();}
+      else if(isAnyDosen&&isAnyAsisten){tabEls[0].hidden=false;tabEls[1].hidden=false;renderSuratTugas();}
+      else{renderSuratTugas();}
+    } else renderSuratTugas();
+  }
   if(name==='penandatangan') loadPenandatangan();
   if(name==='surat-bebas') renderSuratBebas();
 }
@@ -2333,9 +2348,9 @@ function tutupJadwal(jadwalId){
   save(); showToast('🔒','Periode praktikum berhasil ditutup. Surat tugas & sertifikat telah diterbitkan.');
   // Notif: beritahu dosen & asisten bahwa periode ditutup
   const dosenU=state.users.find(u=>u.nama===j.dosen);
-  if(dosenU) addNotif(dosenU.id,'🔒 Periode '+j.matkul+' telah ditutup. Surat tugas Anda telah terbit.','🔒','jadwal');
+  if(dosenU) addNotif(dosenU.id,'🔒 Periode '+j.matkul+' telah ditutup. Surat tugas Anda telah terbit.','🔒','dokumen');
   const asList=Array.isArray(j.asisten)?j.asisten:(j.asisten?[j.asisten]:[]);
-  asList.forEach(aNama=>{const au=state.users.find(u=>u.nama===aNama);if(au)addNotif(au.id,'🔒 Periode '+j.matkul+' telah ditutup. Sertifikat Anda telah terbit.','🔒','jadwal');});
+  asList.forEach(aNama=>{const au=state.users.find(u=>u.nama===aNama);if(au)addNotif(au.id,'🔒 Periode '+j.matkul+' telah ditutup. Sertifikat Anda telah terbit.','🔒','dokumen');});
   closeModal('modal-laporan'); renderJadwal();
 }
 function bukaJadwal(jadwalId){
@@ -3988,7 +4003,7 @@ function renderNotifList() {
 }
 function readNotif(id) {
   const n = (state.notifikasi||[]).find(x => x.id === id);
-  if(n) { n.read = true; save(); updateNotifBadge(); renderNotifList(); }
+  if(n) { n.read = true; save(); updateNotifBadge(); renderNotifList(); if(n.link){const navEl=document.getElementById('nav-'+n.link);if(navEl&&!navEl.hidden)showPage(n.link,navEl);} }
 }
 function markAllRead() {
   (state.notifikasi||[]).forEach(n => { if(n.userId === currentUser?.id) n.read = true; });
