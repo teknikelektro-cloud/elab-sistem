@@ -1223,18 +1223,29 @@ function doLogin() {
   clearAllPageContent();
   document.getElementById('login-screen').hidden = true;
   document.getElementById('app-main').hidden = false;
-  setupRole();
-  updateTaChip();
-  updateBadges();
-  // Selalu mulai dari dashboard
-  showPage('dashboard');
-  updateNotifBadge();
-  // Peringatan jika masih pakai password default admin
-  if(user.id==='u1'&&user.password==='admin2024'){
-    setTimeout(()=>showToast('⚠️','Segera ganti password default admin di menu Pengguna!'),1000);
-  }
-  // Cek pengingat backup (delay 3 detik agar tidak langsung mengganggu)
-  setTimeout(checkBackupReminder, 3000);
+  // Muat ulang data terbaru dari Supabase sebelum render
+  load().then(()=>{
+    // Update currentUser dengan data terbaru dari DB
+    const freshUser = state.users.find(u=>u.id===currentUser.id);
+    if(freshUser) currentUser = {...freshUser, _baseRole: freshUser.role};
+    try { sessionStorage.setItem('e-lab_user', JSON.stringify(currentUser)); } catch(e){}
+    setupRole();
+    updateTaChip();
+    updateBadges();
+    showPage('dashboard');
+    updateNotifBadge();
+    if(currentUser.id==='u1'&&currentUser.password==='admin2024'){
+      setTimeout(()=>showToast('⚠️','Segera ganti password default admin di menu Pengguna!'),1000);
+    }
+    setTimeout(checkBackupReminder, 3000);
+  }).catch(()=>{
+    // Fallback jika load gagal, tetap masuk dengan data lama
+    setupRole();
+    updateTaChip();
+    updateBadges();
+    showPage('dashboard');
+    updateNotifBadge();
+  });
 }
 function doLogout() {
   currentUser = null;
