@@ -1334,8 +1334,9 @@ function setupRole() {
   document.getElementById('nav-surat-bebas').hidden = !(baseR==='admin'||baseR==='mahasiswa'||baseR==='ketua'||baseR==='asisten'||isAnyAsisten);
   document.getElementById('nav-dokumen').hidden = !(baseR==='admin'||isAnyDosen||isAnyAsisten);
   document.getElementById('nav-penandatangan').hidden = baseR!=='admin';
-  document.getElementById('nav-jadwal-saya').hidden = true;
-  document.getElementById('nav-absensi-saya').hidden = true;
+  const showRiwayat = (baseR==='mahasiswa'||baseR==='dosen');
+  document.getElementById('nav-jadwal-saya').hidden = !showRiwayat;
+  document.getElementById('nav-absensi-saya').hidden = !showRiwayat;
   // Hide admin-only elements (download excel, rekap tabs, batch delete)
   document.querySelectorAll('.admin-only').forEach(el=>{
     el.style.display = (baseR==='admin') ? '' : 'none';
@@ -3888,7 +3889,19 @@ function deleteUser(id){
 function renderJadwalSaya(){
   const nim=currentUser?.nim;
   const el=document.getElementById('jadwal-saya-body');
-  const mySesi=state.jadwal.filter(j=>(j.peserta||[]).some(p=>p.nim===nim));
+  const baseR=currentUser?._baseRole||currentUser?.role;
+  const mySesi=state.jadwal.filter(j=>{
+    if(baseR==='dosen') return j.dosen===currentUser?.nama||j.dosen===currentUser?.id;
+    if(nim&&(j.peserta||[]).some(p=>p.nim===nim)) return true;
+    if(currentUser?.id){
+      if((j.ketua||[]).includes(currentUser.id)) return true;
+      const anggota=j.anggotaKelompok||{};
+      for(const kids of Object.values(anggota)){if(Array.isArray(kids)&&kids.includes(currentUser.id)) return true;}
+      const aList=j.asisten||[];
+      if(Array.isArray(aList)&&(aList.includes(currentUser.id)||aList.includes(currentUser.nama))) return true;
+    }
+    return false;
+  });
   const days=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
   const todayStr=new Date().toISOString().split('T')[0];
   el.innerHTML=mySesi.length?`<p style="color:var(--text2);margin-bottom:14px;font-size:13px">Menampilkan ${mySesi.length} sesi aktif untuk NIM <strong>${nim}</strong></p>`+mySesi.map(j=>{
