@@ -440,7 +440,7 @@ textarea { min-height: 80px; resize: vertical; }
         <div class="tab admin-only" onclick="switchTab('jadwal',1,this);renderRekapPraktikum()">Rekap Praktikum</div>
         <div class="tab" id="tab-monitor-dosen" style="display:none" onclick="switchTab('jadwal',2,this);renderMonitorDosen()">📊 Monitor</div>
       </div>
-      <div id="jadwal-tab-0"><div id="jadwal-list"></div></div>
+      <div id="jadwal-tab-0"><div id="jadwal-list"></div><div id="jadwal-saya-section"></div></div>
       <div id="jadwal-tab-1" style="display:none">
         <div class="card">
           <div class="card-header">
@@ -503,7 +503,7 @@ textarea { min-height: 80px; resize: vertical; }
         <div class="tab active" onclick="switchTab('absensi',0,this)">Pengajuan Terbaru</div>
         <div class="tab admin-only" onclick="switchTab('absensi',1,this);renderRekapPinjam()">Rekap Peminjaman</div>
       </div>
-      <div id="absensi-tab-0"><div id="pinjam-terbaru"></div></div>
+      <div id="absensi-tab-0"><div id="pinjam-terbaru"></div><div id="pinjam-saya-section"></div></div>
       <div id="absensi-tab-1" style="display:none">
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
           <input type="text" id="rekap-pinjam-filter-search" oninput="renderRekapPinjam()" placeholder="Cari nama, role..." style="padding:8px 14px;border:1.5px solid var(--border2);border-radius:8px;background:var(--surface2);font-family:inherit;font-size:13px;outline:none;flex:1;min-width:200px">
@@ -1334,9 +1334,8 @@ function setupRole() {
   document.getElementById('nav-surat-bebas').hidden = !(baseR==='admin'||baseR==='mahasiswa'||baseR==='ketua'||baseR==='asisten'||isAnyAsisten);
   document.getElementById('nav-dokumen').hidden = !(baseR==='admin'||isAnyDosen||isAnyAsisten);
   document.getElementById('nav-penandatangan').hidden = baseR!=='admin';
-  const showRiwayat = (baseR==='mahasiswa'||baseR==='dosen');
-  document.getElementById('nav-jadwal-saya').hidden = !showRiwayat;
-  document.getElementById('nav-absensi-saya').hidden = !showRiwayat;
+  document.getElementById('nav-jadwal-saya').hidden = true;
+  document.getElementById('nav-absensi-saya').hidden = true;
   // Hide admin-only elements (download excel, rekap tabs, batch delete)
   document.querySelectorAll('.admin-only').forEach(el=>{
     el.style.display = (baseR==='admin') ? '' : 'none';
@@ -1501,6 +1500,36 @@ function renderJadwal() {
     el.innerHTML=tbl;
   }
   renderCalendar();
+  // Riwayat Praktikum Saya (non-admin)
+  const sayaEl=document.getElementById('jadwal-saya-section');
+  if(sayaEl){
+    const baseR=currentUser?._baseRole||currentUser?.role;
+    if(baseR==='admin'){sayaEl.innerHTML='';return;}
+    const nim=currentUser?.nim;
+    const mySesi=state.jadwal.filter(j=>{
+      if(baseR==='dosen') return j.dosen===currentUser?.nama||j.dosen===currentUser?.id;
+      if(nim&&(j.peserta||[]).some(p=>p.nim===nim)) return true;
+      if(currentUser?.id){
+        if((j.ketua||[]).includes(currentUser.id)) return true;
+        const ag=j.anggotaKelompok||{};for(const kids of Object.values(ag)){if(Array.isArray(kids)&&kids.includes(currentUser.id)) return true;}
+        const aList=j.asisten||[];if(Array.isArray(aList)&&(aList.includes(currentUser.id)||aList.includes(currentUser.nama))) return true;
+      }
+      return false;
+    });
+    if(!mySesi.length){sayaEl.innerHTML=`<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">Riwayat Praktikum Saya</span></div><div class="card-body"><p style="text-align:center;color:var(--text3);padding:20px">Belum ada riwayat praktikum</p></div></div>`;return;}
+    const days=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+    const todayStr2=new Date().toISOString().split('T')[0];
+    let rows=mySesi.map((j,i)=>{
+      const d=new Date(j.tanggal+'T00:00:00');
+      const isToday=j.tanggal===todayStr2;
+      const abStatus=(state.absensi[j.id]||{})[nim];
+      const sc=abStatus==='hadir'?'green':abStatus==='izin'?'amber':abStatus==='alpa'?'red':'gray';
+      const stLabel=abStatus||'Belum dicatat';
+      const statusBadge=j.ditutup?'<span class="badge badge-red">Selesai</span>':(isToday?'<span class="badge badge-blue">Hari Ini</span>':'<span class="badge badge-green">Berjalan</span>');
+      return `<tr><td>${i+1}</td><td style="font-weight:600">${j.matkul}${j.percobaan?' <small>(Perc. '+j.percobaan+')</small>':''}</td><td>${days[d.getDay()]}, ${j.tanggal}</td><td>${j.dosen||'—'}</td><td>${statusBadge}</td><td><span class="badge badge-${sc}">${stLabel}</span></td></tr>`;
+    }).join('');
+    sayaEl.innerHTML=`<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">Riwayat Praktikum Saya</span></div><div class="card-body"><div class="table-wrap"><table><thead><tr><th>No</th><th>Mata Kuliah</th><th>Tanggal</th><th>Dosen</th><th>Status</th><th>Absensi</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+  }
 }
 function downloadCSV(csv, filename){
   try {
@@ -3037,6 +3066,25 @@ function renderPeminjaman(){
     html='<div class="empty"><p>Tidak ada pengajuan terbaru</p></div>';
   }
   document.getElementById('pinjam-terbaru').innerHTML=html;
+  // Riwayat Peminjaman Saya (non-admin)
+  const sayaPEl=document.getElementById('pinjam-saya-section');
+  if(sayaPEl){
+    const baseR2=currentUser?._baseRole||currentUser?.role;
+    if(baseR2==='admin'){sayaPEl.innerHTML='';return;}
+    const myPinjam=(state.peminjaman||[]).filter(p=>p.nim===currentUser?.nim||p.nama===currentUser?.nama);
+    const selesaiP=myPinjam.filter(p=>p.status==='dikembalikan'||p.status==='ditolak');
+    if(!selesaiP.length){sayaPEl.innerHTML=`<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">Riwayat Peminjaman Saya</span></div><div class="card-body"><p style="text-align:center;color:var(--text3);padding:20px">Belum ada riwayat peminjaman selesai</p></div></div>`;return;}
+    let rhtml=`<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">Riwayat Peminjaman Saya</span></div><div class="card-body"><div class="table-wrap"><table><thead><tr><th>Alat</th><th>Tgl Pinjam</th><th>Tgl Kembali</th><th>Keperluan</th><th>Status</th></tr></thead><tbody>`;
+    selesaiP.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).forEach(p=>{
+      const alatList=p.alat||[{alatNama:p.alatNama,jumlah:p.jumlah}];
+      const alatStr=alatList.map(a=>`${a.alatNama} (${a.jumlah})`).join(', ');
+      const sc=p.status==='dikembalikan'?'green':'red';
+      const stTxt=p.status==='dikembalikan'?'✅ Dikembalikan':'❌ Ditolak';
+      rhtml+=`<tr><td style="font-size:12.5px">${alatStr}</td><td>${p.tanggal||'—'}</td><td>${p.aktualKembali||p.rencanakembali||'—'}</td><td style="font-size:12px;color:var(--text2);max-width:140px">${p.ket||'—'}</td><td><span class="badge badge-${sc}">${stTxt}</span></td></tr>`;
+    });
+    rhtml+=`</tbody></table></div></div></div>`;
+    sayaPEl.innerHTML=rhtml;
+  }
 }
 
 function renderRekapPinjam(){
