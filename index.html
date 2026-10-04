@@ -995,7 +995,7 @@ let calMonth = new Date().getMonth(), calYear = new Date().getFullYear();
 // ===== STORAGE (SUPABASE) =====
 async function load() {
   try {
-    const [rUsers, rJadwal, rInv, rPinjam, rNilai, rAbsensi, rReg, rKurikulum, rSettings, rNotif, rSuratBebas, rSuratTugas, rSertifikat, rLaporan] = await Promise.all([
+    const [rUsers, rJadwal, rInv, rPinjam, rNilai, rAbsensi, rReg, rKurikulum, rSettings, rSuratBebas, rSuratTugas, rSertifikat, rLaporan] = await Promise.all([
       sb.from('users').select('*'),
       sb.from('jadwal').select('*'),
       sb.from('inventaris').select('*'),
@@ -1005,7 +1005,6 @@ async function load() {
       sb.from('registrasi').select('*').order('created_at',{ascending:true}),
       sb.from('kurikulum').select('*'),
       sb.from('settings').select('*'),
-      sb.from('notifikasi').select('*').order('created_at',{ascending:false}).limit(200),
       sb.from('surat_bebas').select('*').order('created_at',{ascending:true}),
       sb.from('surat_tugas').select('*').order('created_at',{ascending:true}),
       sb.from('sertifikat_asisten').select('*').order('created_at',{ascending:true}),
@@ -1041,7 +1040,7 @@ async function load() {
     });
     state.registrasi = (rReg.data||[]).map(r=>({id:r.id,nama:r.nama,nim:r.nim||'',hp:r.hp||'',email:r.email||'',angkatan:r.angkatan||null,ket:r.ket||'',status:r.status||'pending',createdAt:r.created_at}));
     state.kurikulum = (rKurikulum.data||[]).map(k=>({id:k.id,kode:k.kode||'',nama:k.nama||'',sks:k.sks||0,semester:k.semester||1,linkModul:k.link_modul||''}));
-    state.notifikasi = (rNotif.data||[]).map(n=>({id:n.id,userId:n.user_id,message:n.message,icon:n.icon||'🔔',read:!!n.read,createdAt:n.created_at,link:n.link||''}));
+    if(!state.notifikasi) state.notifikasi=[];
     // Settings
     state.settings = {tahunAkademik:'2025/2026',semester:'Ganjil'};
     (rSettings.data||[]).forEach(s=>{ try{state.settings[s.key]=JSON.parse(s.value)}catch(e){state.settings[s.key]=s.value;} });
@@ -1119,7 +1118,6 @@ async function _syncToSupabase(){
     // Kurikulum
     if(state.kurikulum?.length) await _upsert('kurikulum', state.kurikulum.map(k=>({id:k.id,kode:k.kode||null,nama:k.nama||null,sks:k.sks||0,semester:k.semester||1,link_modul:k.linkModul||null})));
     // Notifikasi
-    if(state.notifikasi?.length) await _upsert('notifikasi', state.notifikasi.map(n=>({id:n.id,user_id:n.userId,message:n.message,icon:n.icon||'🔔',read:!!n.read,created_at:n.createdAt,link:n.link||null})));
     // Settings
     const settingsRows=Object.entries(state.settings).filter(([k,v])=>typeof v==='string').map(([key,value])=>({key,value}));
     const settingsObjRows=Object.entries(state.settings).filter(([k,v])=>typeof v==='object'&&v!==null).map(([key,value])=>({key,value:JSON.stringify(value)}));
@@ -1906,12 +1904,12 @@ function lihatJadwal(id){
           ${(()=>{const sa=((j.statusAnggota||{})[currentUser.id])||{status:'menunggu'};return sa.status==='disetujui'?'<span style="font-size:10.5px;background:var(--success-light);color:var(--success);border:1px solid var(--success);border-radius:6px;padding:1px 7px;font-weight:600">✅ Disetujui Asisten</span>':'<span style="font-size:10.5px;background:var(--warning-light);color:var(--warning);border:1px solid var(--warning);border-radius:6px;padding:1px 7px;font-weight:600">⏳ Belum Disetujui</span>';})()}
         </div>
         <div id="jp-anggota-chips-${j.id}" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;margin-bottom:8px"></div>
-        <div style="display:flex;gap:6px">
+        ${(()=>{const sa=((j.statusAnggota||{})[currentUser.id])||{status:'menunggu'};return sa.status==='disetujui'?'<div style="font-size:12px;color:var(--success);font-style:italic;margin-top:4px">Anggota telah disetujui asisten. Hubungi asisten untuk membatalkan jika ingin mengubah.</div>':`<div style="display:flex;gap:6px">
           <input type="text" id="jp-anggota-search-${j.id}" placeholder="Cari nama/NIM anggota..." oninput="jpSearchPicker('anggota','${j.id}')" onfocus="jpShowDropdown('anggota','${j.id}')" onblur="setTimeout(()=>jpHideDropdown('anggota','${j.id}'),200)" autocomplete="off" style="flex:1;padding:8px 12px;border:1.5px solid var(--border2);border-radius:8px;background:var(--surface2);font-family:inherit;font-size:13px;outline:none;">
           <button type="button" class="btn btn-primary btn-sm" onclick="jpAddSelected('anggota','${j.id}')" style="white-space:nowrap">+ Tambah</button>
         </div>
         <div id="jp-anggota-dropdown-${j.id}" style="display:none;border:1.5px solid var(--border2);border-radius:8px;background:var(--surface);max-height:160px;overflow-y:auto;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:10px;font-size:12px" onclick="jpSaveAnggota('${j.id}')">💾 Simpan Anggota</button>
+        <button class="btn btn-ghost btn-sm" style="margin-top:10px;font-size:12px" onclick="jpSaveAnggota('${j.id}')">💾 Simpan Anggota</button>`;})()}
       </div>
     </div>`
     :''}
@@ -2243,10 +2241,13 @@ function jpRenderChips(tipe,jadwalId){
   const el=document.getElementById(`jp-${tipe}-chips-${jadwalId}`); if(!el) return;
   const keyFn=_jpKeyFn(tipe);
   if(!ps.selected.length){el.innerHTML='<span style="font-size:12px;color:var(--text3);line-height:2">Belum ada yang dipilih</span>';return;}
+  const j=state.jadwal.find(x=>x.id===jadwalId);
+  const isAnggotaApproved=tipe==='anggota'&&j&&((j.statusAnggota||{})[currentUser?.id]||{}).status==='disetujui';
   el.innerHTML=ps.selected.map(key=>{
     const u=ps.users.find(x=>keyFn(x)===key);
     const label=u?u.nama:key;
-    return `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent-light);color:var(--accent);border-radius:20px;padding:3px 10px;font-size:12.5px;font-weight:600">${label}<button type="button" onclick="jpRemove('${tipe}','${jadwalId}','${key.replace(/'/g,"\\'")}' )" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;line-height:1;padding:0;margin-left:2px">×</button></span>`;
+    const removeBtn=isAnggotaApproved?'':`<button type="button" onclick="jpRemove('${tipe}','${jadwalId}','${key.replace(/'/g,"\\'")}' )" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;line-height:1;padding:0;margin-left:2px">×</button>`;
+    return `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent-light);color:var(--accent);border-radius:20px;padding:3px 10px;font-size:12.5px;font-weight:600">${label}${removeBtn}</span>`;
   }).join('');
 }
 function jpSearchPicker(tipe,jadwalId){
