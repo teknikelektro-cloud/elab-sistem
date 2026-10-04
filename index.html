@@ -1326,7 +1326,7 @@ function setupRole() {
   document.getElementById('nav-jadwal').hidden = false;
   document.getElementById('nav-inventaris').hidden = false;
   document.getElementById('nav-absensi').hidden = false;
-  document.getElementById('nav-kurikulum').hidden = displayRole!=='admin';
+  document.getElementById('nav-kurikulum').hidden = false;
   document.getElementById('nav-users').hidden = displayRole!=='admin';
   const baseR=u._baseRole||u.role;
   const isAnyAsisten=(state.jadwal||[]).some(j=>{const a=j.asisten||[];return Array.isArray(a)?a.includes(u.id)||a.includes(u.nama):a===u.nama;});
@@ -4067,7 +4067,7 @@ document.addEventListener('click', e => {
 // ===== KURIKULUM =====
 function renderKurikulum() {
   const data = state.kurikulum || [];
-  const canEdit = can('manage_users') || currentUser?.role==='dosen';
+  const canEdit = (currentUser?._baseRole||currentUser?.role)==='admin';
   document.getElementById('kurikulum-body').innerHTML = `
     <div class="card" style="padding:0;overflow:hidden;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);">
