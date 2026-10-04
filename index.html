@@ -636,6 +636,7 @@ textarea { min-height: 80px; resize: vertical; }
       </div>
       <div class="form-group"><label>Nama MK</label><input type="text" id="f-kur-nama" placeholder="Praktikum ..."></div>
       <div class="form-group"><label>Semester MK</label><input type="number" id="f-kur-sem" value="1" min="1" max="8" placeholder="1 - 8" style="width:100%;padding:10px 14px;border:1.5px solid var(--border2);border-radius:9px;background:var(--surface2);font-family:inherit;font-size:13.5px;outline:none;"></div>
+      <div class="form-group"><label>📄 Link Modul Praktikum</label><input type="url" id="f-kur-link-modul" placeholder="https://drive.google.com/file/..."></div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('modal-kurikulum')">Batal</button>
@@ -697,7 +698,6 @@ textarea { min-height: 80px; resize: vertical; }
       <div class="form-group"><label>📝 Jumlah Percobaan</label><input type="number" id="f-jumlah-percobaan" min="1" max="10" value="1" placeholder="1" style="width:100%;padding:10px 14px;border:1.5px solid var(--border2);border-radius:9px;background:var(--surface2);font-family:inherit;font-size:13.5px;outline:none;"><p style="font-size:12px;color:var(--text3);margin-top:4px">Jumlah percobaan/eksperimen dalam sesi ini. Ketua kelompok akan mengumpulkan laporan sebanyak jumlah ini.</p></div>
       <div class="form-grid">
         <div class="form-group"><label>🔗 Link Daftar Peserta</label><input type="url" id="f-link-peserta" placeholder="https://docs.google.com/spreadsheets/..."></div>
-        <div class="form-group"><label>📄 Link Modul Praktikum</label><input type="url" id="f-link-modul" placeholder="https://drive.google.com/file/..."></div>
       </div>
     </div>
     <div class="modal-foot">
@@ -1043,7 +1043,7 @@ async function load() {
       state.absensi[a.jadwal_id][a.nim]=a.status;
     });
     state.registrasi = (rReg.data||[]).map(r=>({id:r.id,nama:r.nama,nim:r.nim||'',hp:r.hp||'',email:r.email||'',angkatan:r.angkatan||null,ket:r.ket||'',status:r.status||'pending',createdAt:r.created_at}));
-    state.kurikulum = (rKurikulum.data||[]).map(k=>({id:k.id,kode:k.kode||'',nama:k.nama||'',sks:k.sks||0,semester:k.semester||1}));
+    state.kurikulum = (rKurikulum.data||[]).map(k=>({id:k.id,kode:k.kode||'',nama:k.nama||'',sks:k.sks||0,semester:k.semester||1,linkModul:k.link_modul||''}));
     state.notifikasi = (rNotif.data||[]).map(n=>({id:n.id,userId:n.user_id,message:n.message,icon:n.icon||'🔔',read:!!n.read,createdAt:n.created_at,link:n.link||''}));
     // Settings
     state.settings = {tahunAkademik:'2025/2026',semester:'Ganjil'};
@@ -1120,7 +1120,7 @@ async function _syncToSupabase(){
     // Registrasi
     await _upsert('registrasi', state.registrasi.map(r=>({id:r.id,nama:r.nama,nim:r.nim||null,hp:r.hp||null,email:r.email||null,angkatan:r.angkatan||null,ket:r.ket||null,status:r.status||'pending',created_at:r.createdAt||new Date().toISOString()})));
     // Kurikulum
-    if(state.kurikulum?.length) await _upsert('kurikulum', state.kurikulum.map(k=>({id:k.id,kode:k.kode||null,nama:k.nama||null,sks:k.sks||0,semester:k.semester||1})));
+    if(state.kurikulum?.length) await _upsert('kurikulum', state.kurikulum.map(k=>({id:k.id,kode:k.kode||null,nama:k.nama||null,sks:k.sks||0,semester:k.semester||1,link_modul:k.linkModul||null})));
     // Notifikasi
     if(state.notifikasi?.length) await _upsert('notifikasi', state.notifikasi.map(n=>({id:n.id,user_id:n.userId,message:n.message,icon:n.icon||'🔔',read:!!n.read,created_at:n.createdAt,link:n.link||null})));
     // Settings
@@ -2433,13 +2433,13 @@ function openModalJadwal(id) {
     document.getElementById('f-dosen').value=j.dosen||'';
     document.getElementById('f-jumlah-percobaan').value=j.jumlahPercobaan||1;
     document.getElementById('f-link-peserta').value=j.linkPeserta||'';
-    document.getElementById('f-link-modul').value=j.linkModul||'';
+
   } else {
     document.getElementById('modal-jadwal-title').textContent='Tambah Sesi';
     document.getElementById('jadwal-id').value='';
     document.getElementById('f-tahun-akademik').value=gs.tahunAkademik||'';
     document.getElementById('f-semester').value=gs.semester||'Ganjil';
-    ['f-tanggal','f-tanggal-selesai','f-ruangan','f-mulai','f-selesai','f-link-peserta','f-link-modul'].forEach(i=>document.getElementById(i).value='');
+    ['f-tanggal','f-tanggal-selesai','f-ruangan','f-mulai','f-selesai','f-link-peserta'].forEach(i=>document.getElementById(i).value='');
   }
   m.hidden=false;
 }
@@ -2455,7 +2455,10 @@ function saveJadwal() {
   const semester=document.getElementById('f-semester').value;
   const asisten=(window._pickerState?.asisten?.selected)||[];
   const jumlahPercobaan=parseInt(document.getElementById('f-jumlah-percobaan').value)||1;
-  const obj={id,tahunAkademik,semester,matkul,tanggal,tanggalSelesai:document.getElementById('f-tanggal-selesai').value,ruangan:document.getElementById('f-ruangan').value,mulai:document.getElementById('f-mulai').value,selesai:document.getElementById('f-selesai').value,dosen:document.getElementById('f-dosen').value,asisten,ketua,peralatan,jumlahPercobaan,linkPeserta:document.getElementById('f-link-peserta').value.trim(),linkModul:document.getElementById('f-link-modul').value.trim()};
+  // Auto-ambil linkModul dari MK Praktikum yang dipilih
+  const mkData=(state.kurikulum||[]).find(k=>k.nama===matkul);
+  const linkModul=mkData?.linkModul||'';
+  const obj={id,tahunAkademik,semester,matkul,tanggal,tanggalSelesai:document.getElementById('f-tanggal-selesai').value,ruangan:document.getElementById('f-ruangan').value,mulai:document.getElementById('f-mulai').value,selesai:document.getElementById('f-selesai').value,dosen:document.getElementById('f-dosen').value,asisten,ketua,peralatan,jumlahPercobaan,linkPeserta:document.getElementById('f-link-peserta').value.trim(),linkModul};
   const idx=state.jadwal.findIndex(x=>x.id===id);
   if(idx>=0) state.jadwal[idx]=obj; else state.jadwal.push(obj);
   save();closeModal('modal-jadwal');renderJadwal();updateBadges();showToast('✅','Sesi disimpan');
@@ -3316,17 +3319,24 @@ function renderUsers(){
   } else {
     html+=`<div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:12px">📋 Permintaan Pendaftaran (${pending.length})</div>`;
     html+=pending.map(r=>`
-      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
-        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#6B7280,#4B5563);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0">${r.nama.charAt(0)}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13.5px">${r.nama}</div>
-          <div style="font-size:11.5px;color:var(--text3)">NIM: ${r.nim||'-'} · ${r.email} · HP: ${r.hp||'-'}</div>
-          ${r.ket?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${r.ket}</div>`:''}
-          <div style="font-size:10.5px;color:var(--text3);margin-top:2px">${new Date(r.createdAt).toLocaleString('id-ID')}</div>
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px 16px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#6B7280,#4B5563);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;flex-shrink:0">${r.nama.charAt(0)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px">${r.nama}</div>
+            <div style="font-size:11px;color:var(--text3)">${new Date(r.createdAt).toLocaleString('id-ID')}</div>
+          </div>
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-success btn-sm" onclick="approveRegister('${r.id}')">✅ Setujui</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:12.5px;margin-bottom:12px;padding:10px 12px;background:var(--bg);border-radius:8px">
+          <div><span style="color:var(--text3)">NIM:</span> <strong>${r.nim||'-'}</strong></div>
+          <div><span style="color:var(--text3)">Angkatan:</span> <strong>${r.angkatan||'-'}</strong></div>
+          <div><span style="color:var(--text3)">Email:</span> <strong>${r.email||'-'}</strong></div>
+          <div><span style="color:var(--text3)">HP:</span> <strong>${r.hp||'-'}</strong></div>
+          ${r.ket?`<div style="grid-column:1/-1"><span style="color:var(--text3)">Keterangan:</span> ${r.ket}</div>`:''}
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
           <button class="btn btn-danger btn-sm" onclick="rejectRegister('${r.id}')">❌ Tolak</button>
+          <button class="btn btn-success btn-sm" onclick="approveRegister('${r.id}')">✅ Setujui</button>
         </div>
       </div>`).join('');
   }
@@ -3514,7 +3524,7 @@ Jika ada pertanyaan, silakan hubungi admin laboratorium.
 Salam,
 Admin ${labName}`
     );
-    window.open(`mailto:${r.email}?subject=${subject}&body=${body}`,'_blank');
+    const a=document.createElement('a');a.href=`mailto:${r.email}?subject=${subject}&body=${body}`;a.click();
   }
 }
 function rejectRegister(id){
@@ -4027,11 +4037,12 @@ function renderKurikulum() {
               <th style="padding:11px 16px;text-align:left;font-weight:700;color:var(--text2);font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);">Nama Mata Kuliah</th>
               <th style="padding:11px 16px;text-align:center;font-weight:700;color:var(--text2);font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);">SKS</th>
               <th style="padding:11px 16px;text-align:center;font-weight:700;color:var(--text2);font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);">Semester</th>
+              <th style="padding:11px 16px;text-align:center;font-weight:700;color:var(--text2);font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);">Modul</th>
               ${canEdit ? `<th style="padding:11px 16px;text-align:center;font-weight:700;color:var(--text2);font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);">Aksi</th>` : ''}
             </tr>
           </thead>
           <tbody>
-            ${data.length === 0 ? `<tr><td colspan="${canEdit?6:5}" style="text-align:center;padding:40px;color:var(--text3);">Tidak ada data MK Praktikum</td></tr>` :
+            ${data.length === 0 ? `<tr><td colspan="${canEdit?7:6}" style="text-align:center;padding:40px;color:var(--text3);">Tidak ada data MK Praktikum</td></tr>` :
               data.map((k,i) => `
               <tr style="border-bottom:1px solid var(--border);transition:background .15s;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
                 <td style="padding:12px 16px;color:var(--text3);">${i+1}</td>
@@ -4039,6 +4050,7 @@ function renderKurikulum() {
                 <td style="padding:12px 16px;font-weight:600;color:var(--text);">${k.nama}</td>
                 <td style="padding:12px 16px;text-align:center;color:var(--text2);">${k.sks}</td>
                 <td style="padding:12px 16px;text-align:center;"><span style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:3px 10px;border-radius:5px;font-size:12px;">Sem. ${k.semester}</span></td>
+                <td style="padding:12px 16px;text-align:center;">${k.linkModul?`<a href="${k.linkModul}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration:none;font-size:12px">📄 Modul</a>`:`<span style="color:var(--text3);font-size:12px">-</span>`}</td>
                 ${canEdit ? `<td style="padding:12px 16px;text-align:center;">
                   <div style="display:flex;gap:6px;justify-content:center;">
                     <button class="btn btn-ghost btn-sm" onclick="openModalKurikulum('${k.id}')">✏️ Edit</button>
@@ -4060,6 +4072,7 @@ function openModalKurikulum(id) {
   document.getElementById('f-kur-nama').value = k?.nama||'';
   document.getElementById('f-kur-sks').value = k?.sks||1;
   document.getElementById('f-kur-sem').value = k?.semester||1;
+  document.getElementById('f-kur-link-modul').value = k?.linkModul||'';
 
   document.getElementById('modal-kurikulum').hidden = false;
 }
@@ -4070,8 +4083,9 @@ function saveKurikulum() {
   const semester=parseInt(document.getElementById('f-kur-sem').value)||1;
 
   if(!kode||!nama){showToast('❌','Kode dan nama wajib diisi');return;}
+  const linkModul=document.getElementById('f-kur-link-modul').value.trim();
   const id=document.getElementById('kur-id').value||'k'+Date.now();
-  const obj={id,kode,nama,sks,semester};
+  const obj={id,kode,nama,sks,semester,linkModul};
   const idx=(state.kurikulum||[]).findIndex(x=>x.id===id);
   if(!state.kurikulum) state.kurikulum=[];
   if(!state.settings) state.settings={tahunAkademik:'2025/2026',semester:'Ganjil'};
