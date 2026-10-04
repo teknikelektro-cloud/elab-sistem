@@ -1526,9 +1526,9 @@ function renderJadwal() {
       const sc=abStatus==='hadir'?'green':abStatus==='izin'?'amber':abStatus==='alpa'?'red':'gray';
       const stLabel=abStatus||'Belum dicatat';
       const statusBadge=j.ditutup?'<span class="badge badge-red">Selesai</span>':(isToday?'<span class="badge badge-blue">Hari Ini</span>':'<span class="badge badge-green">Berjalan</span>');
-      return `<tr><td>${i+1}</td><td style="font-weight:600">${j.matkul}${j.percobaan?' <small>(Perc. '+j.percobaan+')</small>':''}</td><td>${days[d.getDay()]}, ${j.tanggal}</td><td>${j.dosen||'—'}</td><td>${statusBadge}</td><td><span class="badge badge-${sc}">${stLabel}</span></td></tr>`;
+      return `<tr><td>${i+1}</td><td style="font-weight:600">${j.matkul}${j.percobaan?' <small>(Perc. '+j.percobaan+')</small>':''}</td><td>${days[d.getDay()]}, ${j.tanggal}</td><td>${j.dosen||'—'}</td><td>${statusBadge}</td></tr>`;
     }).join('');
-    sayaEl.innerHTML=`<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">Riwayat Praktikum Saya</span></div><div class="card-body"><div class="table-wrap"><table><thead><tr><th>No</th><th>Mata Kuliah</th><th>Tanggal</th><th>Dosen</th><th>Status</th><th>Absensi</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    sayaEl.innerHTML=`<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">Riwayat Praktikum Saya</span></div><div class="card-body"><div class="table-wrap"><table><thead><tr><th>No</th><th>Mata Kuliah</th><th>Tanggal</th><th>Dosen</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
   }
 }
 function downloadCSV(csv, filename){
