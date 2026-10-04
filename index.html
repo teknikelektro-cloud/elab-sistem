@@ -437,7 +437,7 @@ textarea { min-height: 80px; resize: vertical; }
     <section class="page" id="page-jadwal">
       <div class="tabs" id="jadwal-tabs-main">
         <div class="tab active" onclick="switchTab('jadwal',0,this)">Praktikum Berjalan</div>
-        <div class="tab" onclick="switchTab('jadwal',1,this);renderRekapPraktikum()">Rekap Praktikum</div>
+        <div class="tab admin-only" onclick="switchTab('jadwal',1,this);renderRekapPraktikum()">Rekap Praktikum</div>
         <div class="tab" id="tab-monitor-dosen" style="display:none" onclick="switchTab('jadwal',2,this);renderMonitorDosen()">📊 Monitor</div>
       </div>
       <div id="jadwal-tab-0"><div id="jadwal-list"></div></div>
@@ -471,8 +471,8 @@ textarea { min-height: 80px; resize: vertical; }
     <section class="page" id="page-inventaris">
       <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
         <input type="text" placeholder="Cari nama, kode, kategori..." id="inv-search" oninput="renderInventaris()" style="flex:1;min-width:200px;padding:10px 14px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface)">
-        <button class="btn btn-danger btn-sm" id="btn-hapus-inv-batch" onclick="deleteBatchInv()" style="display:none">🗑️ Hapus Terpilih (<span id="batch-inv-count">0</span>)</button>
-        <button class="btn btn-primary btn-sm" onclick="downloadInventarisExcel()" style="margin-left:auto">⬇️ Download Excel</button>
+        <button class="btn btn-danger btn-sm admin-only" id="btn-hapus-inv-batch" onclick="deleteBatchInv()" style="display:none">🗑️ Hapus Terpilih (<span id="batch-inv-count">0</span>)</button>
+        <button class="btn btn-primary btn-sm admin-only" onclick="downloadInventarisExcel()" style="margin-left:auto">⬇️ Download Excel</button>
       </div>
       <div id="inv-grid"></div>
     </section>
@@ -501,7 +501,7 @@ textarea { min-height: 80px; resize: vertical; }
     <section class="page" id="page-absensi">
       <div class="tabs" id="pinjam-tabs-main">
         <div class="tab active" onclick="switchTab('absensi',0,this)">Pengajuan Terbaru</div>
-        <div class="tab" onclick="switchTab('absensi',1,this);renderRekapPinjam()">Rekap Peminjaman</div>
+        <div class="tab admin-only" onclick="switchTab('absensi',1,this);renderRekapPinjam()">Rekap Peminjaman</div>
       </div>
       <div id="absensi-tab-0"><div id="pinjam-terbaru"></div></div>
       <div id="absensi-tab-1" style="display:none">
@@ -573,7 +573,7 @@ textarea { min-height: 80px; resize: vertical; }
     <section class="page" id="page-surat-bebas">
       <div class="tabs" id="surat-tabs-main">
         <div class="tab active" onclick="switchTab('surat-bebas',0,this)">Pengajuan Terbaru</div>
-        <div class="tab" onclick="switchTab('surat-bebas',1,this);renderRekapSurat()">Rekap Surat Keluar</div>
+        <div class="tab admin-only" onclick="switchTab('surat-bebas',1,this);renderRekapSurat()">Rekap Surat Keluar</div>
       </div>
       <div id="surat-bebas-tab-0"><div id="surat-bebas-body"></div></div>
       <div id="surat-bebas-tab-1" style="display:none">
@@ -1052,7 +1052,7 @@ async function load() {
     // Sertifikat Asisten
     state.sertifikatAsisten = (rSertifikat.data||[]).map(s=>({id:s.id,jadwalId:s.jadwal_id,asistenId:s.asisten_id,asistenNama:s.asisten_nama,asistenNim:s.asisten_nim,matkul:s.matkul,percobaan:s.percobaan||'',tanggal:s.tanggal,tanggalSelesai:s.tanggal_selesai||'',tahunAkademik:s.tahun_akademik||'',semester:s.semester||'',nomorUrut:s.nomor_urut||null,penandatangan:s.penandatangan||null,status:s.status||'terbit',createdAt:s.created_at}));
     // Laporan
-    state.laporan = (rLaporan.data||[]).map(l=>({id:l.id,jadwalId:l.jadwal_id,userId:l.user_id,nama:l.nama,nim:l.nim,fileName:l.file_name,fileData:l.file_data,status:l.status||'pending',catatan:l.catatan||'',createdAt:l.created_at}));
+    state.laporan = (rLaporan.data||[]).map(l=>({id:l.id,jadwalId:l.jadwal_id,ketuaId:l.user_id,ketuaNama:l.nama,nim:l.nim,link:l.file_name||'',status:l.status||'pending',catatan:l.catatan||'',catatanDosen:l.file_data||'',createdAt:l.created_at,submittedAt:l.created_at}));
   } catch(e) {
     console.error('Supabase load error:', e);
     // Fallback ke localStorage
@@ -1132,7 +1132,7 @@ async function _syncToSupabase(){
     // Sertifikat Asisten
     if(state.sertifikatAsisten?.length) await _upsert('sertifikat_asisten', state.sertifikatAsisten.map(s=>({id:s.id,jadwal_id:s.jadwalId,asisten_id:s.asistenId,asisten_nama:s.asistenNama,asisten_nim:s.asistenNim,matkul:s.matkul,percobaan:s.percobaan||null,tanggal:s.tanggal,tanggal_selesai:s.tanggalSelesai||null,tahun_akademik:s.tahunAkademik||null,semester:s.semester||null,nomor_urut:s.nomorUrut||null,penandatangan:s.penandatangan||null,status:s.status,created_at:s.createdAt||new Date().toISOString()})));
     // Laporan
-    if(state.laporan?.length) await _upsert('laporan', state.laporan.map(l=>({id:l.id,jadwal_id:l.jadwalId,user_id:l.userId,nama:l.nama,nim:l.nim,file_name:l.fileName||null,file_data:l.fileData||null,status:l.status||'pending',catatan:l.catatan||null,created_at:l.createdAt||new Date().toISOString()})));
+    if(state.laporan?.length) await _upsert('laporan', state.laporan.map(l=>({id:l.id,jadwal_id:l.jadwalId,user_id:l.ketuaId,nama:l.ketuaNama,nim:l.nim||null,file_name:l.link||null,file_data:l.catatanDosen||null,status:l.status||'pending',catatan:l.catatan||null,created_at:l.createdAt||new Date().toISOString()})));
     // Handle deletions
     await _syncDeletions();
     console.log('✅ Supabase sync OK');
@@ -1327,6 +1327,10 @@ function setupRole() {
   document.getElementById('nav-penandatangan').hidden = baseR!=='admin';
   document.getElementById('nav-jadwal-saya').hidden = true;
   document.getElementById('nav-absensi-saya').hidden = true;
+  // Hide admin-only elements (download excel, rekap tabs, batch delete)
+  document.querySelectorAll('.admin-only').forEach(el=>{
+    el.style.display = (baseR==='admin') ? '' : 'none';
+  });
 }
 function can(action) {
   if(!currentUser) return false;
@@ -2363,9 +2367,11 @@ function reviewLaporan(lapId,status,catatan){
   if(!state.laporan) return;
   const lap=state.laporan.find(l=>l.id===lapId);
   if(!lap) return;
-  const role=currentUser?.role;
-  if(role==='asisten'||role==='admin'){ lap.status=status; lap.catatan=catatan||''; lap.approvedAsistenAt=status==='menunggu'?'':new Date().toISOString(); }
-  else if(role==='dosen'){ lap.status=status; lap.catatanDosen=catatan||''; lap.approvedDosenAt=new Date().toISOString(); }
+  const jdwForRole=state.jadwal.find(x=>x.id===lap.jadwalId);
+  const role=getRoleForJadwal(currentUser, jdwForRole);
+  const baseR=currentUser?._baseRole||currentUser?.role;
+  if(role==='asisten'||baseR==='admin'){ lap.status=status; lap.catatan=catatan||''; lap.approvedAsistenAt=status==='menunggu'?'':new Date().toISOString(); }
+  else if(role==='dosen'||baseR==='dosen'){ lap.status=status; lap.catatanDosen=catatan||''; lap.approvedDosenAt=new Date().toISOString(); }
   save();
   const jadwalId=lap.jadwalId;
   const msg=status==='menunggu'?'Persetujuan dibatalkan':status.includes('disetujui')?'Laporan disetujui':'Laporan ditolak';
@@ -2375,7 +2381,7 @@ function reviewLaporan(lapId,status,catatan){
   if(jdw){
     const ketuaU=state.users.find(u=>u.id===lap.ketuaId);
     const asistenList=Array.isArray(jdw.asisten)?jdw.asisten:(jdw.asisten?[jdw.asisten]:[]);
-    if(role==='asisten'||role==='admin'){
+    if(role==='asisten'||baseR==='admin'){
       if(status==='disetujui_asisten'){
         // notify ketua & dosen
         if(ketuaU) addNotif(ketuaU.id,'✅ Laporan '+jdw.matkul+' disetujui asisten','✅','jadwal');
@@ -2384,7 +2390,7 @@ function reviewLaporan(lapId,status,catatan){
       } else if(status==='ditolak'){
         if(ketuaU) addNotif(ketuaU.id,'❌ Laporan '+jdw.matkul+' ditolak oleh asisten','❌','jadwal');
       }
-    } else if(role==='dosen'){
+    } else if(role==='dosen'||baseR==='dosen'){
       if(status==='disetujui_dosen'){
         if(ketuaU) addNotif(ketuaU.id,'✅ Laporan '+jdw.matkul+' disetujui dosen','✅','jadwal');
         asistenList.forEach(aNama=>{const au=state.users.find(u=>u.nama===aNama);if(au)addNotif(au.id,'✅ Laporan '+jdw.matkul+' disetujui dosen','✅','jadwal');});
